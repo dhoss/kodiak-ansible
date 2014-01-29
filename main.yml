@@ -1,0 +1,42 @@
+ - hosts: web
+   tasks: 
+
+     - name: Updated apt cache
+       apt: update_cache=true
+
+     - name: Installs packages
+       apt: pkg={{ item }} state=latest
+       with_items:
+         - nginx
+         - git
+
+     - name: Create /var/www/kodiak directory
+       command: mkdir -p /var/www/kodiak
+
+     - name: Create /var/log/nginx/kodiak directory
+       command: mkdir -p /var/log/nginx/kodiak
+    
+     - name: Push default virtual host configuration
+       copy: src=files/kodiak.conf dest=/etc/nginx/conf.d/ mode=0640
+    
+     - name: Check nginx config
+       command: nginx -t -c /etc/nginx/nginx.conf
+       register: result
+       ignore_errors: True
+
+     - name: Rolling back - Removing virtualhost
+       command: rm /etc/nginx/conf.d/kodiak.conf
+       when: result|failed
+  
+     - name: Rolling back - Ending playbook
+       fail: msg="Configuration is not valid."
+       when: result|failed
+
+     - name: Deploy app
+       git: repo=https://github.com/dhoss/Kodiak.git dest=/var/www/kodiak
+       tags: deploy
+     
+       notify: 
+         - restart nginx
+ 
+    
